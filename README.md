@@ -2,7 +2,7 @@
 
 ## 1. Visão Geral
 
-MyShell é um interpretador de linha de comando (shell) para sistemas operacionais do tipo Unix (como o Linux). Desenvolvido em linguagem C, este projeto replica as funcionalidades essenciais e avançadas de shells conhecidos como o bash, servindo como um estudo prático sobre os mecanismos de criação e gerenciamento de processos, comunicação interprocessos (IPC) e manipulação de arquivos no Linux.
+MyShell é um interpretador de linha de comando (shell) para sistemas operacionais do tipo Linux. Desenvolvido em linguagem C, este projeto replica as funcionalidades essenciais e avançadas de shells conhecidos como o bash, servindo como um estudo prático sobre os mecanismos de criação e gerenciamento de processos, comunicação interprocessos (IPC) e manipulação de arquivos no Linux.
 
 ---
 
@@ -71,10 +71,10 @@ Quando um processo em background (&) termina, ele se torna um "zumbi" até que o
 1.  Salve o código-fonte em um arquivo chamado myShell.c.
 2.  Abra o terminal do Linux e navegue até a pasta onde o arquivo foi salvo.
 3.  Compile o programa com o seguinte comando bash:
-    gcc -o myshell myShell.c -Wall
+    ```gcc -o myshell myShell.c -Wall```
     
 4.  Execute o seu novo shell no terminal:
-    ./myshell
+    ```./myshell```
     
 
 ---
