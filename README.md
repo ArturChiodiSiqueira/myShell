@@ -2,102 +2,147 @@
 
 ## 1. Visão Geral
 
-MyShell é um interpretador de linha de comando (shell) para sistemas operacionais do tipo Unix (como o Linux). Desenvolvido em linguagem C, este projeto tem como objetivo replicar as funcionalidades essenciais de shells conhecidos como o `bash`, servindo como um estudo prático sobre os mecanismos de criação e gerenciamento de processos, chamadas de sistema e manipulação de arquivos no Linux.
-
-## 2. Funcionalidades Implementadas
-
-* **Loop de Prompt Interativo**: O shell opera em um ciclo contínuo, exibindo um prompt customizável, aguardando o comando do usuário, executando-o e repetindo o processo.
-* **Prompt Colorido**: O prompt `MyShell>` é exibido na cor amarela para melhor diferenciação visual.
-* **Execução de Programas Externos**: Capaz de executar qualquer programa disponível no `$PATH` do sistema (como `ls`, `gcc`, `pwd`, etc.), utilizando o padrão `fork()`-`execvp()`-`wait()`.
-* **Comandos Embutidos (Built-in)**: Implementação de comandos que modificam o estado do próprio shell:
-    * `cd [caminho]`: Altera o diretório de trabalho atual. Suporta mudança para um caminho específico, para o diretório `HOME` do usuário (com `cd` sozinho) e para o diretório pai (`cd ..`).
-    * `exit`: Encerra a sessão do MyShell de forma limpa.
+MyShell é um interpretador de linha de comando (shell) para sistemas operacionais do tipo Unix (como o Linux). Desenvolvido em linguagem C, este projeto replica as funcionalidades essenciais e avançadas de shells conhecidos como o bash, servindo como um estudo prático sobre os mecanismos de criação e gerenciamento de processos, comunicação interprocessos (IPC) e manipulação de arquivos no Linux.
 
 ---
 
-## 3. Arquitetura e Explicação do Código
+## 2. Funcionalidades Implementadas
 
-O funcionamento do MyShell é baseado em um loop central que orquestra a leitura, análise e execução dos comandos.
+### Módulo 1: Essencial
 
-### 3.1. O Loop Principal (`while(1)`)
+* *Loop de Prompt Interativo*: O shell opera em um ciclo contínuo, exibindo um prompt customizável (`MyShell>`) em cor amarela.
+* *Execução de Programas Externos*: Capaz de executar qualquer programa disponível no $PATH do sistema (como ls, gcc, pwd, etc.), utilizando o padrão fork()-execvp()-wait().
+* *Comandos Embutidos (Built-in)*:
+    * cd [caminho]: Altera o diretório de trabalho atual. Suporta cd (para o HOME) e cd ...
+    * exit: Encerra a sessão do MyShell de forma limpa.
 
-A função `main` contém um loop infinito que representa o ciclo de vida do shell. A cada iteração, ele executa os seguintes passos:
-1.  **Exibe o Prompt**: Usa `printf()` com códigos de escape ANSI para mostrar o prompt `MyShell> ` em amarelo. A função `fflush(stdout)` é chamada para garantir que o prompt apareça na tela imediatamente.
-2.  **Lê o Comando**: Utiliza `fgets()` para ler a linha de comando inserida pelo usuário de forma segura, evitando estouros de buffer.
-3.  **Analisa o Comando**: A linha lida é passada para a função `parse_comando`.
-4.  **Executa o Comando**: Com base no comando analisado, decide se ele é um comando embutido ou um programa externo.
+### Módulo 2: Avançado
 
-### 3.2. Análise de Comandos (`parse_comando`)
+* Redirecionamento de Saída (>, >>):
+    * comando > arquivo: Redireciona a saída padrão (stdout) para arquivo, sobrescrevendo-o.
+    * comando >> arquivo: Redireciona a saída padrão (stdout) para arquivo, concatenando no final (append).
+* Redirecionamento de Entrada (<):
+    * comando < arquivo: Redireciona a entrada padrão (stdin) para ler de arquivo.
+* Pipes (|):
+    * comando1 | comando2: Encadeia dois comandos, onde a saída padrão de comando1 serve como entrada padrão para comando2.
+* Execução em Background (&):
+    * comando &: Executa o comando em segundo plano, liberando o prompt do shell imediatamente. O shell gerencia corretamente os processos filhos (zumbis) através de um handler para o sinal SIGCHLD.
 
-Esta função é responsável por "traduzir" a entrada do usuário em um formato que o sistema possa entender.
-* **Entrada**: Uma string única, como `"ls -l /home"`.
-* **Processo**:
-    1.  Primeiro, o caractere de nova linha (`\n`), capturado pelo `fgets`, é removido do final da string.
-    2.  Em seguida, a função `strtok` é usada para quebrar a string em "tokens" (pedaços), usando o espaço como delimitador.
-    3.  Cada token é armazenado como um ponteiro em um array de strings (`char *args[]`).
-* **Saída**: Um array de strings terminado por `NULL`, como `["ls", "-l", "/home", NULL]`. O `NULL` final é crucial, pois atua como um sinalizador para a função `execvp`, indicando o fim da lista de argumentos.
+---
 
-### 3.3. Execução de Comandos
+## 3. Arquitetura e Explicação
 
-A lógica de execução é dividida em duas categorias:
+O funcionamento do MyShell é baseado em um loop central (main) que orquestra a leitura, análise e execução dos comandos.
 
-#### a) Comandos Embutidos (`cd` e `exit`)
-Estes comandos são especiais porque precisam alterar o estado do **próprio processo do shell**. Se tentássemos executar `cd` em um processo filho, o diretório mudaria apenas para o filho, que morreria em seguida, e o shell pai permaneceria no mesmo lugar.
-* `exit`: Simplesmente usa a instrução `break` para sair do loop `while(1)`, encerrando o programa.
-* `cd`: Usa a chamada de sistema `chdir()`. Se nenhum argumento for fornecido, a variável de ambiente `HOME` é recuperada com `getenv("HOME")` para determinar o destino. Caso contrário, o argumento fornecido (`args[1]`) é usado como o caminho.
+### 3.1. Análise de Comandos
 
-#### b) Programas Externos (O Padrão Fork-Exec-Wait)
-Para todos os outros comandos, o MyShell utiliza o modelo clássico de gerenciamento de processos do Unix:
-1.  **`fork()` - A Clonagem**: O processo principal do shell (o Pai) cria uma cópia exata de si mesmo, gerando um novo processo (o Filho).
-2.  **O Trabalho do Filho (`pid == 0`)**: O processo filho executa a chamada de sistema `execvp(args[0], args)`. Esta função **substitui** o código do processo filho pelo código do programa que se deseja executar (ex: `ls`). Se `execvp` for bem-sucedido, o código do MyShell não é mais executado pelo filho; se falhar (ex: comando não encontrado), ele retorna `-1`, um erro é impresso, e o filho encerra com `exit(EXIT_FAILURE)`.
-3.  **O Trabalho do Pai (`pid > 0`)**: O processo pai, enquanto isso, executa a chamada `wait(&status)`. Isso faz com que o pai **pause e espere** até que o processo filho tenha terminado completamente sua execução.
-4.  **Repetição**: Uma vez que o filho termina e o pai é "acordado" pelo `wait`, o loop `while(1)` continua, e o prompt é exibido novamente, pronto para o próximo comando.
+1.  **parse_comando**: Realiza a tokenização inicial, separando a linha de comando por espaços.
+2.  **analisar_e_executar**: É a central de lógica do Módulo 2. Ela varre os tokens em busca dos operadores especiais:
+    * Se um pipe (|) é encontrado, ela divide os argumentos em dois (antes e depois do pipe) e chama executar_pipe.
+    * Se não há pipe, ela varre os argumentos em busca de redirecionamento (<, >, >>) e background (&), armazenando seus alvos (ex: nome do arquivo) e limpando o array de argumentos. Em seguida, chama executar_comando_simples.
+
+### 3.2. Execução de Comandos
+
+A lógica de execução é dividida em três categorias:
+
+* Comandos Embutidos (cd, exit): São tratados diretamente no loop main. Isso é necessário pois eles modificam o estado do próprio processo do shell (o diretório atual ou sua terminação).
+* Execução Simples (executar_comando_simples): Esta função lida com todos os comandos que não são pipes. Ela cria *um* processo filho.
+    * *No Filho*: Antes de chamar execvp, o processo filho verifica se há redirecionamentos. Se houver, ele usa open() para abrir os arquivos e dup2() para "religar" os descritores de arquivo padrão (STDIN, STDOUT) para que apontem para os arquivos abertos.
+    * *No Pai*: O pai verifica a flag background. Se for false, ele chama waitpid() e espera o filho terminar. Se for true, ele imprime o PID do filho e continua imediatamente, sem esperar.
+* Execução com Pipe (executar_pipe): Esta função implementa o cmd1 | cmd2. Ela cria *dois* processos filhos:
+    1.  O Pai primeiro cria um pipe() (um canal de comunicação).
+    2.  O Pai cria o *Filho 1* (pid1). O Filho 1 usa dup2() para redirecionar seu STDOUT para a ponta de escrita do pipe e então executa cmd1.
+    3.  O Pai cria o *Filho 2* (pid2). O Filho 2 usa dup2() para redirecionar seu STDIN para a ponta de leitura do pipe e então executa cmd2.
+    4.  O Pai fecha ambas as pontas do pipe (crucial!) e chama waitpid() duas vezes, esperando por ambos os filhos terminarem.
+
+### 3.3. Gerenciamento de Processos Zumbis
+
+Quando um processo em background (&) termina, ele se torna um "zumbi" até que o pai o "limpe" (usando wait). Para evitar o acúmulo de zumbis, registramos um signal handler (handle_sigchld) para o sinal SIGCHLD. O kernel envia este sinal ao pai sempre que um filho morre, e o handler usa waitpid(..., WNOHANG) para limpar o processo terminado.
 
 ---
 
 ## 4. Como Compilar e Executar
 
-**Pré-requisitos:**
+*Pré-requisitos:*
 * Um ambiente Linux (como o Ubuntu rodando no WSL).
-* O compilador GCC e ferramentas de build (`sudo apt install build-essential`).
+* O compilador GCC e ferramentas de build (sudo apt install build-essential).
 
-**Passos:**
-1.  Salve o código-fonte em um arquivo chamado `myShell.c`.
+*Passos:*
+1.  Salve o código-fonte em um arquivo chamado myShell.c.
 2.  Abra o terminal do Linux e navegue até a pasta onde o arquivo foi salvo.
-3.  Compile o programa com o seguinte comando:
-    ```bash
+3.  Compile o programa com o seguinte comando bash:
     gcc -o myshell myShell.c -Wall
-    ```
-4.  Execute o seu novo shell:
-    ```bash
+    
+4.  Execute o seu novo shell no terminal:
     ./myshell
-    ```
+    
 
 ---
 
-## 5. Comandos de Teste
+## 5. Cenários de Teste
 
-Após executar `./myshell`, você pode usar os seguintes comandos para testar as funcionalidades:
+### a) Testes do Módulo 1 (Funcionalidades Essenciais)
 
-### Testes Básicos de Execução
 ```bash
-ls
+# Teste de comandos básicos
+ls -la
 pwd
 whoami
-date
----------------------------------------------------------------
-ls -la
-echo "Meu shell funciona!"
-touch arquivo_teste.txt  # Cria um arquivo
-ls                       # Verifica se o arquivo foi criado
-rm arquivo_teste.txt     # Remove o arquivo
----------------------------------------------------------------
-pwd                      # Mostra o diretório inicial
-mkdir pasta_teste
-cd pasta_teste
-pwd                      # Verifica se o diretório mudou
-cd ..
-pwd                      # Verifica se voltou ao diretório pai
-cd                       # Volta para o diretório HOME
-pwd
-exit                     # Encerra o MyShell
+
+# Teste de 'cd'
+MyShell> pwd
+/home/micaellisilva/myShell
+MyShell> cd /tmp
+MyShell> pwd
+/tmp
+MyShell> cd
+MyShell> pwd
+/home/micaellisilva
+
+# Teste de 'exit'
+MyShell> exit
+```
+### b) Testes do Módulo 2 (Funcionalidades Avançadas)
+```bash
+
+# --- Teste de Redirecionamento de Saída (>) ---
+# Cria o arquivo 'lista.txt' e escreve a saída do 'ls -l' nele
+MyShell> ls -l > lista.txt
+# Verifica o conteúdo (deve mostrar a lista de arquivos)
+MyShell> cat lista.txt
+# Sobrescreve o arquivo 'lista.txt' com a saída do 'whoami'
+MyShell> whoami > lista.txt
+MyShell> cat lista.txt
+
+# --- Teste de Redirecionamento de Saída (>>) ---
+# Adiciona (append) a saída do 'date' ao final do 'lista.txt'
+MyShell> date >> lista.txt
+MyShell> cat lista.txt
+# (O arquivo agora deve conter seu nome de usuário E a data)
+
+# --- Teste de Redirecionamento de Entrada (<) ---
+# Cria um arquivo com nomes para ordenar
+MyShell> echo "banana" > nomes.txt
+MyShell> echo "abacaxi" >> nomes.txt
+MyShell> echo "laranja" >> nomes.txt
+# Usa 'sort' para ler de 'nomes.txt' e imprimir ordenado
+MyShell> sort < nomes.txt
+abacaxi
+banana
+laranja
+
+# --- Teste de Pipe (|) ---
+# Encadeia 'ls -l' com 'grep', filtrando apenas o arquivo .c
+MyShell> ls -l | grep ".c"
+# Encadeia 'cat' com 'sort' para ordenar nosso arquivo de nomes
+MyShell> cat nomes.txt | sort
+
+# --- Teste de Execução em Background (&) ---
+# Executa um comando longo (sleep 5) em background
+MyShell> sleep 5 &
+Comando [PID 1234] iniciado em background.
+# O prompt deve voltar imediatamente
+MyShell> ls
+# (Enquanto o 'ls' roda, o 'sleep' continua em background)
+# (Após 5s, o processo 'sleep' terminará e será limpo pelo handler)
+```
